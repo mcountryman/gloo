@@ -4,7 +4,6 @@ local suffixes = {
   windows = "_win32",
 }
 
-flags "C++11"
 defines "GMMODULE"
 
 includedirs {

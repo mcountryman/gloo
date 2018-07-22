@@ -11,20 +11,21 @@
 
 namespace GarrysMod {
 namespace Lua {
+
   class LuaValue
   {
   public:
+    typedef bool                         bool_t;
     typedef std::map<LuaValue, LuaValue> table_t;
     typedef double                       number_t;
     typedef std::string                  string_t;
-    typedef bool                         boolean_t;
     typedef CFunc                        function_t;
     typedef void*                        userdata_t;
     typedef std::variant<
+      bool_t,
       table_t,
       number_t,
       string_t,
-      boolean_t,
       function_t,
       userdata_t
     > value_t;
@@ -38,12 +39,16 @@ namespace Lua {
     LuaValue(table_t value) { _type = Type::TABLE; _value = value; }
     LuaValue(number_t value) { _type = Type::NUMBER; _value = value; }
     LuaValue(string_t value) { _type = Type::STRING; _value = value; }
-    LuaValue(boolean_t value) { _type = Type::BOOL; _value = value; }
+    LuaValue(bool_t value) { _type = Type::BOOL; _value = value; }
     LuaValue(function_t value) { _type = Type::FUNCTION; _value = value; }
     LuaValue(userdata_t value) { _type = Type::USERDATA; _value = value; }
     LuaValue(int type, userdata_t value) { _type = type; _value = value; }
     LuaValue(const LuaValue &value) { Copy(value); }
   public:
+    /**
+     * @brief Copy lua value from that
+     * @param that - Lua value
+     */
     void Copy(const LuaValue &that)
     {
       _type = that._type;
@@ -51,7 +56,18 @@ namespace Lua {
     }
 
     /**
-     * Push table value to lua stack
+     * @brief Checks if type is equal to supplied type
+     * @param type - Type to check
+     * @throw std::runtime_error
+     */
+    void AssertType(int type) const
+    {
+      if (_type != type)
+        throw std::runtime_error("Expected type '" + std::string("") + "' not type '" + std::string("") + "'");
+    }
+
+    /**
+     * @brief Push table value to lua stack
      * @param state - Lua state
      */
     void PushTable(lua_State *state) const
@@ -59,33 +75,22 @@ namespace Lua {
       if (_type != Type::TABLE)
         throw new std::runtime_error("Unable to push type '" + std::string(LUA->GetTypeName(_type)) + "' as table");
 
+      // Create table
       LUA->CreateTable();
-      int table_ref = LUA->ReferenceCreate();
-      LUA->ReferencePush(table_ref);
 
+      // Iterate over table value
       for (const auto &pair : std::get<table_t>(_value))
       {
-        auto key = pair.first;
-        auto value = pair.second;
-
-        if (key == *this)
-          LUA->ReferencePush(table_ref);
-        else
-          key.Push(state);
-
-        if (value == *this)
-          LUA->ReferencePush(table_ref);
-        else
-          value.Push(state);
-
+        // Push key and value to stack
+        pair.first.Push(state);
+        pair.second.Push(state);
+        // Assign pair to table
         LUA->SetTable(-3);
       }
-
-      LUA->ReferenceFree(table_ref);
     }
 
     /**
-     * Push value to lua stack 
+     * @brief Push value to lua stack 
      * @param state - Lua state
      */
     void Push(lua_State *state) const
@@ -96,18 +101,12 @@ namespace Lua {
         case Type::TABLE: PushTable(state); break;
         case Type::NUMBER: LUA->PushNumber(std::get<number_t>(_value)); break;
         case Type::STRING: LUA->PushString(std::get<string_t>(_value).c_str()); break;
-        case Type::BOOL: LUA->PushBool(std::get<boolean_t>(_value)); break;
+        case Type::BOOL: LUA->PushBool(std::get<bool_t>(_value)); break;
         case Type::FUNCTION: LUA->PushCFunction(std::get<function_t>(_value)); break;
         default:
           LUA->PushUserdata(std::get<userdata_t>(_value));
           break;
       }
-    }
-  private:
-    void assert_type(int type) const
-    {
-      if (_type != type)
-        throw std::runtime_error("Expected type '" + std::string("") + "' not type '" + std::string("") + "'");
     }
   public:
     inline LuaValue& operator= (const LuaValue& rhs)
@@ -123,7 +122,7 @@ namespace Lua {
       switch (_type)
       {
         case Type::NIL: return false;
-        case Type::BOOL: return std::get<boolean_t>(_value) < std::get<boolean_t>(rhs._value);
+        case Type::BOOL: return std::get<bool_t>(_value) < std::get<bool_t>(rhs._value);
         case Type::NUMBER: return std::get<number_t>(_value) < std::get<number_t>(rhs._value);
         case Type::STRING: return std::get<string_t>(_value) < std::get<string_t>(rhs._value);
         case Type::FUNCTION: return std::get<function_t>(_value) < std::get<function_t>(rhs._value);
@@ -141,7 +140,7 @@ namespace Lua {
       switch (_type)
       {
         case Type::NIL: return true;
-        case Type::BOOL: return std::get<boolean_t>(_value) == std::get<boolean_t>(rhs._value);
+        case Type::BOOL: return std::get<bool_t>(_value) == std::get<bool_t>(rhs._value);
         case Type::TABLE: return std::get<table_t>(_value) == std::get<table_t>(rhs._value);
         case Type::NUMBER: return std::get<number_t>(_value) == std::get<number_t>(rhs._value);
         case Type::STRING: return std::get<string_t>(_value) == std::get<string_t>(rhs._value);
@@ -152,7 +151,7 @@ namespace Lua {
     inline bool operator!=(const LuaValue& rhs) const { return !(*this == rhs); }
     inline LuaValue& operator[](LuaValue idx)
     {
-      assert_type(Type::TABLE);
+      AssertType(Type::TABLE);
       return std::get<table_t>(_value)[idx];
     }
 
@@ -170,12 +169,52 @@ namespace Lua {
     inline bool operator==(T rhs) const { return *this == LuaValue(rhs); }
     template<typename T>
     inline bool operator!=(T rhs) const { return *this != LuaValue(rhs); }
+
+    operator bool() const {
+      AssertType(Type::BOOL);
+      return std::get<bool_t>(_value);
+    }
+
+    operator int() const {
+      AssertType(Type::NUMBER);
+      return std::get<double>(_value);
+    }
+
+    operator double() const {
+      AssertType(Type::NUMBER);
+      return std::get<double>(_value);
+    }
+
+    operator std::string() const {
+      AssertType(Type::STRING);
+      return std::get<string_t>(_value);
+    }
+
+    operator const char*() const {
+      AssertType(Type::STRING);
+      return std::get<string_t>(_value).c_str();
+    }
+
+    operator table_t() const {
+      AssertType(Type::TABLE);
+      return std::get<table_t>(_value);
+    }
+
+    operator function_t() const {
+      AssertType(Type::FUNCTION);
+      return std::get<function_t>(_value);
+    }
+
+    operator userdata_t() const {
+      // TODO: Assert types
+      return std::get<userdata_t>(_value);
+    }
   public:
     /**
-     * Pop lua table from stack
+     * @brief pop lua table from stack
      * @param state    - Lua state
      * @param position - Lua stack position
-     * @returns New lua table value
+     * @return new lua table value
      */
     static inline LuaValue PopTable(lua_State *state, int position = 1)
     {
@@ -186,34 +225,43 @@ namespace Lua {
       if (type != Type::TABLE)
         throw std::runtime_error("Unable to pop type '" + std::string(LUA->GetTypeName(type)) + "' as table");
 
+      // Create table ref and push ref to stack
       LUA->Push(position);
       table_ref = LUA->ReferenceCreate();
       LUA->ReferencePush(table_ref);
+      // Push nil as first key
       LUA->PushNil();
 
+      // Increment lua iterator
       while (LUA->Next(-2))
       {
         LuaValue key;
         LuaValue value;
 
+        // Push key and table ref
         LUA->Push(-2);
         LUA->ReferencePush(table_ref);
 
+        // Ensure key is not equal to table ref
         if (LUA->Equal(-1, -2))
           throw std::runtime_error("Unable to pop table with cyclic reference");
         else
           key = LuaValue::Pop(state, -2);
 
+        // Ensure value is not equal to table ref
         if (LUA->Equal(-1, -3))
           throw std::runtime_error("Unable to pop table with cyclic reference");
         else
           value = LuaValue::Pop(state, -3);
 
+        // Store key/value pair
         std::get<table_t>(table_value._value)[key] = value;
 
+        // Pop key copy, table ref, and value
         LUA->Pop(3);
       }
 
+      // Pop table and free table ref
       LUA->Pop();
       LUA->ReferenceFree(table_ref);
 
@@ -221,10 +269,10 @@ namespace Lua {
     }
 
     /**
-     * Pop lua value from stack
+     * @brief pop lua value from stack
      * @param state    - Lua state
      * @param position - Lua stack position
-     * @returns New lua value
+     * @returns new lua value
      */
     static inline LuaValue Pop(lua_State *state, int position = 1)
     {
@@ -252,7 +300,7 @@ namespace Lua {
     }
 
     /**
-     * Creates empty LuaValue shared_ptr
+     * @brief creates empty LuaValue
      * @param type - Lua type
      */
     static inline LuaValue Make(int type)
