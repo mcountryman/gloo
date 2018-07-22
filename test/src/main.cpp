@@ -1,20 +1,17 @@
 #include <GarrysMod/Lua/Interface.h>
 #include <GarrysMod/Lua/LuaValue.h>
+#include <vector>
 
 int echo(lua_State *state) {
   int argc = LUA->Top();
+  std::vector<GarrysMod::Lua::LuaValue> args;
 
-  for (int i = 1; i <= argc; i++) {
-    auto value = GarrysMod::Lua::LuaValue::Pop(state, i);
+  for (int i = 1; i <= argc; i++)
+    args.push_back(GarrysMod::Lua::LuaValue::Pop(state, i));
+  for (const auto &arg : args)
+    arg.Push(state);
 
-    LUA->PushSpecial(GarrysMod::Lua::SPECIAL_GLOB);
-      LUA->GetField(-1, "print");
-      value.Push(state);
-      LUA->Call(1, 0);
-    LUA->Pop();
-  }
-
-  return 0;
+  return args.size();
 }
 
 int test_push(lua_State *state) {

@@ -20,69 +20,34 @@ namespace Lua {
     typedef bool                         boolean_t;
     typedef CFunc                        function_t;
     typedef void*                        userdata_t;
-
-    union value_t
-    {
-      table_t   *table;
-      number_t   number;
-      string_t  *string;
-      boolean_t  boolean;
-      function_t function;
-      userdata_t userdata;
-
-      value_t() noexcept {}
-      value_t(table_t value) noexcept {
-        table = create<table_t>(value);
-      }
-      value_t(number_t value) noexcept : number(value) {}
-      value_t(string_t value) noexcept {
-        string = create<string_t>(value);
-      }
-      value_t(boolean_t value) noexcept : boolean(value) {}
-      value_t(function_t value) noexcept : function(value) {}
-      value_t(userdata_t value) noexcept : userdata(value) {}
-      ~value_t() {
-      
-      }
-    };
+    typedef std::variant<
+      table_t,
+      number_t,
+      string_t,
+      boolean_t,
+      function_t,
+      userdata_t
+    > value_t;
   private:
     int     _type;
     value_t _value;
   public:
     int type() const { return _type; }
   public:
-    LuaValue() : _value() { _type = Type::NIL; }
-    LuaValue(table_t value) : _value(value) { _type = Type::TABLE; }
-    LuaValue(number_t value) : _value(value) { _type = Type::NUMBER; }
-    LuaValue(string_t value) : _value(value) { _type = Type::STRING; }
-    LuaValue(boolean_t value) : _value(value) { _type = Type::BOOL; }
-    LuaValue(function_t value) : _value(value) { _type = Type::FUNCTION; }
-    LuaValue(userdata_t value) : _value(value) { _type = Type::USERDATA; }
-    LuaValue(int type, userdata_t value) : _value(value) { _type = type; }
-    LuaValue(LuaValue &&value) { Copy(value); }
-    ~LuaValue() {
-      switch (_type) {
-        case Type::TABLE:
-        {
-          std::allocator<table_t> allocator;
-          std::allocator_traits<decltype(allocator)>::destroy(allocator, _value.table);
-          std::allocator_traits<decltype(allocator)>::deallocate(allocator, _value.table, 1);
-          break;
-        }
-        case Type::STRING:
-        {
-          std::allocator<string_t> allocator;
-          std::allocator_traits<decltype(allocator)>::destroy(allocator, _value.string);
-          std::allocator_traits<decltype(allocator)>::deallocate(allocator, _value.string, 1);
-          break;
-        }
-      }
-    }
+    LuaValue() { _type = Type::NIL; }
+    LuaValue(table_t value) { _type = Type::TABLE; _value = value; }
+    LuaValue(number_t value) { _type = Type::NUMBER; _value = value; }
+    LuaValue(string_t value) { _type = Type::STRING; _value = value; }
+    LuaValue(boolean_t value) { _type = Type::BOOL; _value = value; }
+    LuaValue(function_t value) { _type = Type::FUNCTION; _value = value; }
+    LuaValue(userdata_t value) { _type = Type::USERDATA; _value = value; }
+    LuaValue(int type, userdata_t value) { _type = type; _value = value; }
+    LuaValue(const LuaValue &value) { Copy(value); }
   public:
-    void Copy(LuaValue &that)
+    void Copy(const LuaValue &that)
     {
-      std::swap(_type, that._type);
-      std::swap(_value, that._value);
+      _type = that._type;
+      _value = that._value;
     }
 
     /**
@@ -98,7 +63,7 @@ namespace Lua {
       int table_ref = LUA->ReferenceCreate();
       LUA->ReferencePush(table_ref);
 
-      for (const auto &pair : *_value.table)
+      for (const auto &pair : std::get<table_t>(_value))
       {
         auto key = pair.first;
         auto value = pair.second;
@@ -129,12 +94,12 @@ namespace Lua {
       {
         case Type::NIL: LUA->PushNil(); break;
         case Type::TABLE: PushTable(state); break;
-        case Type::NUMBER: LUA->PushNumber(_value.number); break;
-        case Type::STRING: LUA->PushString(_value.string->c_str()); break;
-        case Type::BOOL: LUA->PushBool(_value.boolean); break;
-        case Type::FUNCTION: LUA->PushCFunction(_value.function); break;
+        case Type::NUMBER: LUA->PushNumber(std::get<number_t>(_value)); break;
+        case Type::STRING: LUA->PushString(std::get<string_t>(_value).c_str()); break;
+        case Type::BOOL: LUA->PushBool(std::get<boolean_t>(_value)); break;
+        case Type::FUNCTION: LUA->PushCFunction(std::get<function_t>(_value)); break;
         default:
-          LUA->PushUserdata(_value.userdata);
+          LUA->PushUserdata(std::get<userdata_t>(_value));
           break;
       }
     }
@@ -147,9 +112,7 @@ namespace Lua {
   public:
     inline LuaValue& operator= (const LuaValue& rhs)
     {
-      std::swap(_type, rhs._type);
-      std::swap(_value, rhs._value);
-
+      Copy(rhs);
       return *this;
     }
 
@@ -160,11 +123,11 @@ namespace Lua {
       switch (_type)
       {
         case Type::NIL: return false;
-        case Type::BOOL: return _value.boolean < rhs._value.boolean;
-        case Type::NUMBER: return _value.number < rhs._value.number;
-        case Type::STRING: return _value.string < rhs._value.string;
-        case Type::FUNCTION: return _value.function < rhs._value.function;
-        default: return _value.userdata < rhs._value.userdata;
+        case Type::BOOL: return std::get<boolean_t>(_value) < std::get<boolean_t>(rhs._value);
+        case Type::NUMBER: return std::get<number_t>(_value) < std::get<number_t>(rhs._value);
+        case Type::STRING: return std::get<string_t>(_value) < std::get<string_t>(rhs._value);
+        case Type::FUNCTION: return std::get<function_t>(_value) < std::get<function_t>(rhs._value);
+        default: return std::get<userdata_t>(_value) < std::get<userdata_t>(rhs._value);
       }
     }
     inline bool operator> (const LuaValue& rhs) const { return rhs < *this; }
@@ -178,47 +141,19 @@ namespace Lua {
       switch (_type)
       {
         case Type::NIL: return true;
-        case Type::BOOL: return _value.boolean == rhs._value.boolean;
-        case Type::TABLE: return _value.table == rhs._value.table;
-        case Type::NUMBER: return _value.number == rhs._value.number;
-        case Type::STRING: return _value.string == rhs._value.string;
-        case Type::FUNCTION: return _value.function == rhs._value.function;
-        default: return _value.userdata == rhs._value.userdata;
+        case Type::BOOL: return std::get<boolean_t>(_value) == std::get<boolean_t>(rhs._value);
+        case Type::TABLE: return std::get<table_t>(_value) == std::get<table_t>(rhs._value);
+        case Type::NUMBER: return std::get<number_t>(_value) == std::get<number_t>(rhs._value);
+        case Type::STRING: return std::get<string_t>(_value) == std::get<string_t>(rhs._value);
+        case Type::FUNCTION: return std::get<function_t>(_value) == std::get<function_t>(rhs._value);
+        default: return std::get<userdata_t>(_value) == std::get<userdata_t>(rhs._value);
       }
     }
     inline bool operator!=(const LuaValue& rhs) const { return !(*this == rhs); }
     inline LuaValue& operator[](LuaValue idx)
     {
       assert_type(Type::TABLE);
-      return _value.table->operator[](idx);
-    }
-
-    explicit operator bool() const {
-      assert_type(Type::BOOL);
-      return _value.boolean;
-    }
-    explicit operator table_t() const {
-      assert_type(Type::TABLE);
-      return *_value.table;
-    }
-    explicit operator number_t() const {
-      assert_type(Type::NUMBER);
-      return _value.number;
-    }
-    explicit operator string_t() const {
-      assert_type(Type::STRING);
-      return *_value.string;
-    }
-    explicit operator const char*() const {
-      assert_type(Type::STRING);
-      return _value.string->c_str();
-    }
-    explicit operator function_t() const {
-      assert_type(Type::FUNCTION);
-      return _value.function;
-    }
-    explicit operator userdata_t() const {
-      return _value.userdata;
+      return std::get<table_t>(_value)[idx];
     }
 
     template<typename T>
@@ -244,9 +179,8 @@ namespace Lua {
      */
     static inline LuaValue PopTable(lua_State *state, int position = 1)
     {
-      table_t table;
       int     table_ref;
-      auto    table_value = LuaValue(table);
+      auto    table_value = LuaValue(table_t());
       int     type = LUA->GetType(position);
 
       if (type != Type::TABLE)
@@ -275,7 +209,7 @@ namespace Lua {
         else
           value = LuaValue::Pop(state, -3);
 
-        table[key] = value;
+        std::get<table_t>(table_value._value)[key] = value;
 
         LUA->Pop(3);
       }
@@ -343,22 +277,6 @@ namespace Lua {
     }
   private:
     static int __empty(lua_State *state) { return 0; }
-
-    template<typename T, typename... Args>
-    static T* create(Args&& ...args) {
-      using AllocatorType = std::allocator<T>;
-      using AllocatorTraits = std::allocator_traits<AllocatorType>;
-
-      AllocatorType alloc;
-
-      auto deleter = [&](T *object) {
-        AllocatorTraits::deallocate(alloc, object, 1);
-      };
-      std::unique_ptr<T, decltype(deleter)> object(AllocatorTraits::allocate(alloc, 1), deleter);
-      AllocatorTraits::construct(alloc, object.get(), std::forward<Args>(args)...);
-      assert(object != nullptr);
-      return object.release();
-    }
   }; // LuaValue
 
 }} // GarrysMod::Lua
