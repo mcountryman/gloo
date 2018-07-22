@@ -1,3 +1,5 @@
+local config = require "config"
+
 workspace "gloo_test"
   location "./project"
   configurations { "Debug" }
@@ -6,6 +8,7 @@ project "gloo_test"
   language "C++"
   location "./project"
   targetdir "./bin"
+  cppdialect "C++17"
 
   files {
     "src/**.cpp",
@@ -17,3 +20,7 @@ project "gloo_test"
   filter "configurations:Debug"
     defines { "DEBUG" }
     symbols "On"
+
+  postbuildcommands {
+    '{COPY} "%{cfg.buildtarget.abspath}" "'..config.garrysmod..'/garrysmod/lua/bin/'..config.libname..'"*',
+  }
