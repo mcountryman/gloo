@@ -36,14 +36,18 @@ namespace Lua {
     int type() const { return _type; }
   public:
     LuaValue() { _type = Type::NIL; }
+
+    LuaValue(bool_t value) { _type = Type::BOOL; _value = value; }
     LuaValue(table_t value) { _type = Type::TABLE; _value = value; }
     LuaValue(number_t value) { _type = Type::NUMBER; _value = value; }
     LuaValue(string_t value) { _type = Type::STRING; _value = value; }
-    LuaValue(bool_t value) { _type = Type::BOOL; _value = value; }
     LuaValue(function_t value) { _type = Type::FUNCTION; _value = value; }
     LuaValue(userdata_t value) { _type = Type::USERDATA; _value = value; }
     LuaValue(int type, userdata_t value) { _type = type; _value = value; }
+
     LuaValue(const LuaValue &value) { Copy(value); }
+
+    LuaValue(unsigned int value) { _type = Type::NUMBER; _value = (number_t)value; }
   public:
     /**
      * @brief Copy lua value from that
@@ -92,8 +96,9 @@ namespace Lua {
     /**
      * @brief Push value to lua stack 
      * @param state - Lua state
+     * @return number of items pushed to stack
      */
-    void Push(lua_State *state) const
+    int Push(lua_State *state) const
     {
       switch (_type)
       {
@@ -107,6 +112,8 @@ namespace Lua {
           LUA->PushUserdata(std::get<userdata_t>(_value));
           break;
       }
+
+      return 1;
     }
   public:
     inline LuaValue& operator= (const LuaValue& rhs)
@@ -170,44 +177,9 @@ namespace Lua {
     template<typename T>
     inline bool operator!=(T rhs) const { return *this != LuaValue(rhs); }
 
-    operator bool() const {
-      AssertType(Type::BOOL);
-      return std::get<bool_t>(_value);
-    }
-
-    operator int() const {
-      AssertType(Type::NUMBER);
-      return std::get<double>(_value);
-    }
-
-    operator double() const {
-      AssertType(Type::NUMBER);
-      return std::get<double>(_value);
-    }
-
-    operator std::string() const {
-      AssertType(Type::STRING);
-      return std::get<string_t>(_value);
-    }
-
-    operator const char*() const {
-      AssertType(Type::STRING);
-      return std::get<string_t>(_value).c_str();
-    }
-
-    operator table_t() const {
-      AssertType(Type::TABLE);
-      return std::get<table_t>(_value);
-    }
-
-    operator function_t() const {
-      AssertType(Type::FUNCTION);
-      return std::get<function_t>(_value);
-    }
-
-    operator userdata_t() const {
-      // TODO: Assert types
-      return std::get<userdata_t>(_value);
+    template<typename T>
+    operator T() const {
+      return std::get<T>(_value);
     }
   public:
     /**
@@ -322,6 +294,18 @@ namespace Lua {
         default:
           return LuaValue(type, nullptr);
       }
+    }
+
+    /**
+     * @brief push value to lua stack
+     * @param state - lua state
+     * @param value - lua value
+     * @return number of items pushed to stack
+     */
+    template<typename T>
+    static int Push(lua_State *state, T value)
+    {
+      return LuaValue(value).Push(state);
     }
   private:
     static int __empty(lua_State *state) { return 0; }

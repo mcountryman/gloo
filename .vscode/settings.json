@@ -37,6 +37,19 @@
     "xlocnum": "cpp",
     "xmemory": "cpp",
     "xstddef": "cpp",
-    "variant": "cpp"
+    "variant": "cpp",
+    "algorithm": "cpp",
+    "functional": "cpp",
+    "list": "cpp",
+    "optional": "cpp",
+    "unordered_map": "cpp",
+    "vector": "cpp",
+    "xhash": "cpp",
+    "mutex": "cpp",
+    "chrono": "cpp",
+    "deque": "cpp",
+    "ratio": "cpp",
+    "xthread": "cpp",
+    "thread": "cpp"
   }
 }
