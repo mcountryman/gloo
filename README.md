@@ -1,5 +1,5 @@
 # gloo
-A OOP helper library intended to aid the creation of modern C++17 binary modules in Garry's Mod.
+An OOP helper library intended to aid the creation of modern C++17 binary modules in Garry's Mod.
 
 ## Getting Started
 #### Download
