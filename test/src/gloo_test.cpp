@@ -56,8 +56,7 @@ class TestObject
 
       if (value.type() == Type::STRING)
       {
-        std::string _ = value;
-        obj->_member = _;
+        obj->_member = value;
       }
 
       return 0;

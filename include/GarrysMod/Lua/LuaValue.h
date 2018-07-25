@@ -179,14 +179,14 @@ namespace Lua {
     template<typename T>
     inline bool operator!=(T rhs) const { return *this != LuaValue(rhs); }
 
-    template<typename T>
-    operator T() const {
-      return std::get<T>(_value);
-    }
+    operator const bool_t() const { return std::get<bool_t>(_value); }
+    operator const table_t() const { return std::get<table_t>(_value); }
+    operator const number_t() const { return std::get<number_t>(_value); }
+    operator const string_t() const { return std::get<string_t>(_value); }
+    operator const function_t() const { return std::get<function_t>(_value); }
+    operator const userdata_t() const { return std::get<userdata_t>(_value); }
 
-    operator int() const {
-      return (int)std::get<number_t>(_value);
-    }
+    operator int() const { return (int)std::get<number_t>(_value); }
   public:
     /**
      * @brief pop lua table from stack
