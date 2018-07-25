@@ -8,7 +8,6 @@ project "gloo_test"
   language "C++"
   location "./project"
   targetdir "./bin"
-  cppdialect "C++17"
 
   files {
     "src/**.cpp",

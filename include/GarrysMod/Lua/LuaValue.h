@@ -47,10 +47,12 @@ namespace Lua {
 
     LuaValue(const LuaValue &value) { Copy(value); }
 
+    LuaValue(int value) { _type = Type::NUMBER; _value = (number_t)value; }
     LuaValue(unsigned int value) { _type = Type::NUMBER; _value = (number_t)value; }
+    LuaValue(const char *value) { _type = Type::STRING; _value = std::string(value); }
   public:
     /**
-     * @brief Copy lua value from that
+     * @brief copy lua value from that
      * @param that - Lua value
      */
     void Copy(const LuaValue &that)
@@ -180,6 +182,10 @@ namespace Lua {
     template<typename T>
     operator T() const {
       return std::get<T>(_value);
+    }
+
+    operator int() const {
+      return (int)std::get<number_t>(_value);
     }
   public:
     /**

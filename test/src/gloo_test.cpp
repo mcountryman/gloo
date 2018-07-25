@@ -9,23 +9,20 @@
 using namespace GarrysMod::Lua;
 
 class TestObject
-  : public LuaObject<239, TestObject>
+  : public LuaEventEmitter<239, TestObject>
 {
   private:
-    LuaEvent::shared_t _event;
-    std::string        _member;
-    std::thread        _thread;
-    bool _run;
+    bool        _run;
+    std::string _member;
+    std::thread _thread;
   public:
     std::string name() override { return "TestObject"; }
   public:
-    TestObject() :  LuaObject()
+    TestObject() : LuaEventEmitter()
     {
       _run = true;
-      _event = LuaEvent::Make();
       _thread = std::thread(&TestObject::thread_work, this);
 
-      AddGetter("event", get_event);
       AddGetter("member", get_member);
       AddSetter("member", set_member);
     }
@@ -41,7 +38,8 @@ class TestObject
       {
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(1s);
-        _event->Emit("this", "is", 69.69);
+
+        Emit("event", "anything", "you", "want", "here", 69.99);
       }
     }
 
@@ -63,13 +61,6 @@ class TestObject
       }
 
       return 0;
-    }
-
-    static int get_event(lua_State *state)
-    {
-      auto obj = Pop(state);
-
-      return obj->_event->Push(state);
     }
 }; // TestObject
 

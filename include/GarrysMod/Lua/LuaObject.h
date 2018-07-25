@@ -14,14 +14,14 @@ namespace Lua {
 
   template<unsigned char TType, class TChildObject>
   class LuaObject :
-    public std::enable_shared_from_this<LuaObject<TType, TChildObject>>
+    public std::enable_shared_from_this<TChildObject>
   {
   private:
-    std::map<std::string, CFunc>    _getters;
-    std::map<std::string, CFunc>    _setters;
-    std::map<std::string, CFunc>    _methods;
-    std::map<lua_State*, int>       _references;
-    std::map<std::string, CFunc>    _metamethods;
+    std::map<std::string, CFunc> _getters;
+    std::map<std::string, CFunc> _setters;
+    std::map<std::string, CFunc> _methods;
+    std::map<lua_State*, int>    _references;
+    std::map<std::string, CFunc> _metamethods;
   public:
     int type() { return TType; }
     virtual std::string name() { return "LuaObject"; }
@@ -33,10 +33,34 @@ namespace Lua {
       AddMetaMethod("__tostring", __tostring);
     }
   public:
+    /**
+     * @brief define getter method to be used in __index metamethod
+     * @param name - name of getter method
+     * @param fn   - callback when obj is indexed in lua with the supplied name
+     */
     void AddGetter(std::string name, CFunc fn) { _getters[name] = fn; }
+    
+    /**
+     * @brief define setter method to be used in __newindex metamethod
+     * @param name - name of setter method
+     * @param fn   - callback when obj is assigned a value in lua to the supplied name
+     */
     void AddSetter(std::string name, CFunc fn) { _setters[name] = fn; }
+
+    /**
+     * @brief define method
+     * @param name - name of method
+     * @param fn   - callback when lua invokes a method on obj
+     */
     void AddMethod(std::string name, CFunc fn) { _methods[name] = fn; }
+
+    /**
+     * @brief define metamethod
+     * @param name - name of metamethod
+     * @param fn   - callback when metamethod is invoked
+     */
     void AddMetaMethod(std::string name, CFunc fn) { _metamethods[name] = fn; }
+
     /**
      * @brief push object to lua stack
      * @param state - lua state
@@ -47,6 +71,8 @@ namespace Lua {
       LUA->ReferencePush(_references[state]);
       return 1;
     }
+
+    virtual void Destroy(lua_State *state) {}
   private:
     void registerObject(lua_State *state)
     {
@@ -101,7 +127,7 @@ namespace Lua {
       std::shared_ptr<TChildObject> *obj_ptr = (std::shared_ptr<TChildObject>*)obj_data->data;
       std::shared_ptr<TChildObject> obj = *obj_ptr;
 
-      // TODO: Invoke user defined destructor
+      obj->Destroy(state);
 
       // Free reference
       LUA->ReferenceFree(obj->_references[state]);

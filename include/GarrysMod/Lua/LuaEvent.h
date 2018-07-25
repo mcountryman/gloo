@@ -5,8 +5,10 @@
 #include <deque>
 #include <tuple>
 #include <mutex>
+#include <vector>
+#include <memory>
 #include <sstream>
-#include <functional>
+#include <algorithm>
 #include "LuaValue.h"
 #include "LuaObject.h"
 #include "GarrysMod/Lua/Interface.h"
@@ -14,221 +16,319 @@
 namespace GarrysMod {
 namespace Lua {
 
-  class ILuaEvent
+  class ILuaEventEmitter
   {
   public:
-    virtual void Think(lua_State*) = 0;
-  }; // ILuaEvent
+    virtual void Think(lua_State *state) = 0;
+  }; // ILuaEventEmitter
 
-  class LuaEventManager
+  class LuaEventEmitterManager
   {
   private:
-    std::set<std::weak_ptr<ILuaEvent>> _events;
-    bool _registered;
+    std::set<std::weak_ptr<ILuaEventEmitter>> _emitters;
+    std::string _hook_name()
+    {
+      std::ostringstream ss;
+      ss << "LuaEventEmitterManager_" << reinterpret_cast<const void*>(this);
+
+      return ss.str();
+    }
+    bool _hooked;
   public:
     /**
-     * @brief create lua think hook using LuaEventManager::think as callback
+     * @brief called every tick
      * @param state - lua state
      */
-    void Register(lua_State *state)
+    void Think(lua_State *state)
     {
-      if (_registered)
-        return;
+      // Begin iteration of emitters
+      for (auto &iter = _emitters.begin(); iter != _emitters.end();)
+      {
+        // Attempt to get shared_ptr
+        if (auto emitter = iter->lock())
+        {
+          emitter->Think(state);
+          ++iter;
+        }
+        else
+          // Shared_ptr not accessable, remove from set
+          iter = _emitters.erase(iter);
+      }
 
-      std::stringstream id;
-      id << "LuaEventManager_";
-      id << static_cast<const void*>(this);
+      // If zero emitters stored, remove Think hook
+      if (_emitters.size() == 0)
+        resetThink(state);
+    }
+
+    /**
+     * @brief inserts emitter weak_ptr to stored set and hooks Think if not
+     *  already hooked
+     * @param state - lua state
+     * @param emitter - emitter to store
+     */
+    void RegisterEmitter(lua_State *state, std::weak_ptr<ILuaEventEmitter> emitter)
+    {
+      _emitters.insert(emitter);
+      hookThink(state);
+    }
+  private:
+    void hookThink(lua_State *state)
+    {
+      if (_hooked)
+        return;
 
       LUA->PushSpecial(SPECIAL_GLOB);
         LUA->GetField(-1, "hook");
           LUA->GetField(-1, "Add");
             LUA->PushString("Think");
-            LUA->PushString(id.str().c_str());
+            LUA->PushString(_hook_name().c_str());
             LUA->PushCFunction(think);
             LUA->Call(3, 0);
-
-      _registered = true;
+      
+      _hooked = true;
     }
 
-    /**
-     * @brief register ILuaEvent
-     */
-    void RegisterEvent(std::weak_ptr<ILuaEvent> event)
+    void resetThink(lua_State *state)
     {
-      _events.insert(event);
+      if (!_hooked)
+        return;
+
+      LUA->PushSpecial(SPECIAL_GLOB);
+        LUA->GetField(-1, "hook");
+          LUA->GetField(-1, "Remove");
+            LUA->PushString("Think");
+            LUA->PushString(_hook_name().c_str());
+            LUA->Call(2, 0);
+
+      _hooked = false;
     }
   private:
     static int think(lua_State *state)
     {
-      auto manager = Current(state);
-      auto events = manager._events;
-
-      for (auto iter = events.begin(); iter != events.end();)
-      {
-        if (auto event = iter->lock())
-        {
-          event->Think(state);
-          ++iter;
-          continue;
-        }
-
-        iter = events.erase(iter);
-      }
-
+      Current(state).Think(state);
       return 0;
     }
   public:
-    static LuaEventManager& Current(lua_State *state)
+    static LuaEventEmitterManager& Current(lua_State *state)
     {
-      static std::map<lua_State*, LuaEventManager> _managers;
+      static std::map<lua_State*, LuaEventEmitterManager> _managers;
       return _managers[state];
     }
-  }; // LuaEventManager
+  }; // LuaEventEmitterManager
 
-  class LuaEvent :
-    public LuaObject<240, LuaEvent>,
-    public ILuaEvent
+  template<unsigned char TType, class TChildObject>
+  class LuaEventEmitter :
+    public LuaObject<TType, TChildObject>
+  , public ILuaEventEmitter
   {
-  public:
-    typedef std::shared_ptr<LuaEvent> shared_t;
   private:
-    std::vector<std::tuple<CFunc, bool>> _listeners;
+    std::map<std::string, std::vector<std::tuple<bool, int>>> _listeners;
     std::mutex _listeners_mtx;
-    std::deque<std::vector<LuaValue>> _emit_queue;
-    std::mutex _emit_queue_mtx;
+    std::deque<std::tuple<std::string, std::vector<LuaValue>>> _events;
+    std::mutex _events_mtx;
+  private:
+    int _max_events_per_tick;
+  protected:
+    /**
+     * @brief get maximum number of events to process for each Think call
+     */
+    int max_events_per_tick() { return _max_events_per_tick; }
+
+    /**
+     * @brief set maximum number of events to process for each Think call
+     */
+    void max_events_per_tick(int value) { _max_events_per_tick = value; }
   public:
-    LuaEvent() : LuaObject()
+    LuaEventEmitter() :
+      _max_events_per_tick(100),
+      LuaObject()
     {
       AddMethod("on", on);
       AddMethod("once", once);
-      AddMethod("removeAll", removeAll);
+      AddMethod("add_listener", add_listener);
+      AddMethod("remove_listeners", remove_listeners);
     }
   public:
-    void AddListener(CFunc fn, bool once = false)
+    /**
+     * @brief enqueue event with supplied arguments
+     * @param name - event name
+     * @param args - event args
+     */
+    template<typename... Args>
+    void Emit(std::string name, Args ...args)
     {
-      std::unique_lock<std::mutex> _lock(_listeners_mtx);
-      _listeners.push_back(
-        std::make_tuple(fn, once)
+      std::unique_lock<std::mutex> lock(_events_mtx);
+
+      std::vector<LuaValue> argv = { LuaValue(args)... };
+
+      _events.push_back(
+        std::make_tuple(name, argv)
       );
     }
 
-    void RemoveListeners()
-    {
-      std::unique_lock<std::mutex> _lock(_listeners_mtx);
-      _listeners.clear();
-    }
-
-    template<typename... Args>
-    void Emit(Args&& ...args)
-    {
-      std::unique_lock<std::mutex> _lock(_emit_queue_mtx);
-      std::vector<LuaValue> lua_args = {LuaValue(args)...};
-
-      _emit_queue.push_back(lua_args);
-    }
-  public:
+    /**
+     * @param called via LuaEventEmitterManager
+     * @param state - lua state
+     */
     void Think(lua_State *state) override
     {
-      std::unique_lock<std::mutex> _lock(_emit_queue_mtx);
+      std::unique_lock<std::mutex> events_lock(_events_mtx);
 
-      while (!_emit_queue.empty())
+      if (_events.empty())
+        return;
+      
+      // Limited event iteration
+      for (int i = 0; i < std::min((int)_events.size(), _max_events_per_tick); i++)
       {
-        auto args = _emit_queue.front();
-        _emit_queue.pop_front();
+        // Pop first event
+        auto event = _events.front();
+        auto name = std::get<0>(event);
+        auto args = std::get<1>(event);
+        _events.pop_front();
 
-        std::unique_lock<std::mutex> _lock(_listeners_mtx);
-        for (auto it = _listeners.begin(); it != _listeners.end();)
+        // Lock listeners vector
+        std::unique_lock<std::mutex> listeners_lock(_listeners_mtx);
+
+        // Iterate listeners
+        std::vector<std::tuple<bool, int>> &listeners = _listeners[name];
+        for (auto iter = listeners.begin(); iter != listeners.end();)
         {
-          auto fn = std::get<0>(*it);
-          auto once = std::get<1>(*it);
+          auto argc = 0;
+          auto once = std::get<0>(*iter);
+          auto ref = std::get<1>(*iter);
 
-          LUA->PushCFunction(fn);
+          // Push reference to callback
+          LUA->ReferencePush(ref);
+
+          // Push args and increment argc
           for (auto &arg : args)
-            arg.Push(state);
-          LUA->Call(args.size(), 0);
+            argc += arg.Push(state);
+          
+          // Invoke callback with args count
+          LUA->Call(argc, 0);
 
+          // Remove if once bit is set
           if (once)
-            it = _listeners.erase(it);
+            iter = listeners.erase(iter);
           else
-            ++it;
+            ++iter;
         }
       }
     }
-  private:
-    static int get_listeners_count(lua_State *state)
-    {
-      auto obj = Pop(state, 1);
-      std::unique_lock<std::mutex> _lock(obj->_listeners_mtx);
 
-      return LuaValue::Push(state, obj->_listeners.size());
+    /**
+     * @brief clears listeners vector and unrefs all supplied listeners
+     * @param state - lua state
+     */
+    void Destroy(lua_State *state) override
+    {
+      removeListeners(state);
+    }
+  private:
+    void addListener(lua_State *state, std::string name, int fn_ref, bool once)
+    {
+      std::unique_lock<std::mutex> lock(_listeners_mtx);
+
+      // Store listener
+      _listeners[name].push_back(std::make_tuple(once, fn_ref));
+
+      // Register this in event emitter manager
+      LuaEventEmitterManager::Current(state)
+        .RegisterEmitter(
+          state,
+          shared_from_this()
+        );
     }
 
+    void removeListeners(lua_State *state)
+    {
+      std::unique_lock<std::mutex> lock(_listeners_mtx);
+
+      for (auto &listeners : _listeners)
+      {
+        for (auto &listener : listeners.second)
+        {
+          LUA->ReferenceFree(std::get<1>(listener));
+        }
+      }
+
+      _listeners.clear();
+    }
+  private:
     static int on(lua_State *state)
     {
-      LUA->CheckType(2, Type::FUNCTION);
+      LUA->CheckType(2, Type::STRING);
+      LUA->CheckType(3, Type::FUNCTION);
 
       auto obj = Pop(state, 1);
-      auto fn = LUA->GetCFunction(2);
+      auto name = LuaValue::Pop(state, 2);
 
-      obj->AddListener(fn, false);
+      LUA->Push(3);
+      int fn_ref = LUA->ReferenceCreate();
 
-      LuaEventManager::Current(state).Register(state);
-      LuaEventManager::Current(state).RegisterEvent(std::static_pointer_cast<ILuaEvent>(obj));
-
+      obj->addListener(state, name, fn_ref, false);
       return 0;
     }
 
     static int once(lua_State *state)
     {
-      LUA->CheckType(2, Type::FUNCTION);
+      LUA->CheckType(2, Type::STRING);
+      LUA->CheckType(3, Type::FUNCTION);
 
       auto obj = Pop(state, 1);
-      auto fn = LUA->GetCFunction(2);
+      auto name = LuaValue::Pop(state, 2);
 
-      obj->AddListener(fn, false);
+      LUA->Push(3);
+      int fn_ref = LUA->ReferenceCreate();
 
-      LuaEventManager::Current(state).Register(state);
-      LuaEventManager::Current(state).RegisterEvent(std::static_pointer_cast<ILuaEvent>(obj));
-
+      obj->addListener(state, name, fn_ref, true);
       return 0;
     }
 
-    static int removeAll(lua_State *state)
+    static int add_listener(lua_State *state)
     {
-      auto obj = Pop(state, 1);
-      obj->RemoveListeners();
+      LUA->CheckType(2, Type::STRING);
+      LUA->CheckType(3, Type::FUNCTION);
 
+      auto obj = Pop(state, 1);
+      auto name = LuaValue::Pop(state, 2);
+      auto once = false;
+
+      LUA->Push(3);
+      int fn_ref = LUA->ReferenceCreate();
+
+      if (LUA->IsType(4, Type::BOOL))
+        once = LUA->GetBool(4);
+
+      obj->addListener(state, name, fn_ref, once);
       return 0;
     }
-  }; // LuaEvent
 
+    static int remove_listeners(lua_State *state)
+    {
+      Pop(state, 1)->removeListeners(state);
+      return 0;
+    }
+  }; // LuaEventEmitter
 
-  bool operator< (
-    const std::weak_ptr<ILuaEvent> &lhs,
-    const std::weak_ptr<ILuaEvent> &rhs
-  )
+  /**
+   * @brief lt operator implementation for ILuaEventEmitter weak_ptr to allow weak_ptr in set
+   * @param lhs - left hand side
+   * @param rhs - right hand side
+   * @return lhs < rhs
+   */
+  bool operator < (const std::weak_ptr<ILuaEventEmitter>& lhs, const std::weak_ptr<ILuaEventEmitter>& rhs)
   {
-    auto lptr = lhs.lock();
-    auto rptr = rhs.lock();
+    auto lhs_shared = lhs.lock();
+    auto rhs_shared = rhs.lock();
 
-    if (!rptr) return true;
-    if (!lptr) return false;
+    if (!lhs_shared & !rhs_shared)
+      return false;
+    
+    if (!lhs_shared) return false;
+    if (!rhs_shared) return true;
 
-    return lptr < rptr;
-  }
-
-  bool operator==(
-    const std::weak_ptr<ILuaEvent> &lhs,
-    const std::weak_ptr<ILuaEvent> &rhs
-  )
-  {
-    auto lptr = lhs.lock();
-    auto rptr = rhs.lock();
-
-    if (!rptr) return false;
-    if (!lptr) return true;
-
-    return lptr == rptr;
+    return lhs_shared < rhs_shared;
   }
 
 }} // GarrysMod::Lua

@@ -50,6 +50,8 @@
     "deque": "cpp",
     "ratio": "cpp",
     "xthread": "cpp",
-    "thread": "cpp"
+    "thread": "cpp",
+    "set": "cpp",
+    "sstream": "cpp"
   }
 }
