@@ -1,4 +1,6 @@
 # gloo
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/71105f2b7c3d431d889044836f5c63bf)](https://www.codacy.com/project/mcountryman/gloo/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=mcountryman/gloo&amp;utm_campaign=Badge_Grade_Dashboard)
+
 An OOP helper library intended to aid the creation of modern C++17 binary modules in Garry's Mod.
 
 ## Getting Started
