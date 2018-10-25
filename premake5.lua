@@ -5,11 +5,12 @@ local suffixes = {
 }
 
 defines "GMMODULE"
-cppdialect "C++17"
+cppdialect "C++11"
 
 includedirs {
   "include",
   "vendor/gmod-module-base/include",
+  "vendor/variant/include/mpark",
 }
 
 targetprefix "gm_"

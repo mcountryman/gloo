@@ -1,3 +1,6 @@
 [submodule "vendor/gmod-module-base"]
 	path = vendor/gmod-module-base
 	url = https://github.com/Facepunch/gmod-module-base.git
+[submodule "vendor/variant"]
+	path = vendor/variant
+	url = https://github.com/mpark/variant.git

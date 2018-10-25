@@ -4,7 +4,6 @@
 #include <tuple>
 #include <memory>
 #include <string>
-#include <optional>
 #include <functional>
 #include "LuaValue.h"
 #include "GarrysMod/Lua/Interface.h"

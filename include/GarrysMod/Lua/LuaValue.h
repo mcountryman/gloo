@@ -5,9 +5,12 @@
 #include <string>
 #include <memory>
 #include <cassert>
-#include <variant>
 #include <algorithm>
 #include "GarrysMod/Lua/Interface.h"
+
+// C++ 17 std::variant pollyfill
+// https://github.com/mpark/variant
+#include "variant.hpp"
 
 namespace GarrysMod {
 namespace Lua {
@@ -21,7 +24,7 @@ namespace Lua {
     typedef std::string                  string_t;
     typedef CFunc                        function_t;
     typedef void*                        userdata_t;
-    typedef std::variant<
+    typedef mpark::variant<
       bool_t,
       table_t,
       number_t,
@@ -85,7 +88,7 @@ namespace Lua {
       LUA->CreateTable();
 
       // Iterate over table value
-      for (const auto &pair : std::get<table_t>(_value))
+      for (const auto &pair : mpark::get<table_t>(_value))
       {
         // Push key and value to stack
         pair.first.Push(state);
@@ -106,12 +109,12 @@ namespace Lua {
       {
         case Type::NIL: LUA->PushNil(); break;
         case Type::TABLE: PushTable(state); break;
-        case Type::NUMBER: LUA->PushNumber(std::get<number_t>(_value)); break;
-        case Type::STRING: LUA->PushString(std::get<string_t>(_value).c_str()); break;
-        case Type::BOOL: LUA->PushBool(std::get<bool_t>(_value)); break;
-        case Type::FUNCTION: LUA->PushCFunction(std::get<function_t>(_value)); break;
+        case Type::NUMBER: LUA->PushNumber(mpark::get<number_t>(_value)); break;
+        case Type::STRING: LUA->PushString(mpark::get<string_t>(_value).c_str()); break;
+        case Type::BOOL: LUA->PushBool(mpark::get<bool_t>(_value)); break;
+        case Type::FUNCTION: LUA->PushCFunction(mpark::get<function_t>(_value)); break;
         default:
-          LUA->PushUserdata(std::get<userdata_t>(_value));
+          LUA->PushUserdata(mpark::get<userdata_t>(_value));
           break;
       }
 
@@ -131,11 +134,11 @@ namespace Lua {
       switch (_type)
       {
         case Type::NIL: return false;
-        case Type::BOOL: return std::get<bool_t>(_value) < std::get<bool_t>(rhs._value);
-        case Type::NUMBER: return std::get<number_t>(_value) < std::get<number_t>(rhs._value);
-        case Type::STRING: return std::get<string_t>(_value) < std::get<string_t>(rhs._value);
-        case Type::FUNCTION: return std::get<function_t>(_value) < std::get<function_t>(rhs._value);
-        default: return std::get<userdata_t>(_value) < std::get<userdata_t>(rhs._value);
+        case Type::BOOL: return mpark::get<bool_t>(_value) < mpark::get<bool_t>(rhs._value);
+        case Type::NUMBER: return mpark::get<number_t>(_value) < mpark::get<number_t>(rhs._value);
+        case Type::STRING: return mpark::get<string_t>(_value) < mpark::get<string_t>(rhs._value);
+        case Type::FUNCTION: return mpark::get<function_t>(_value) < mpark::get<function_t>(rhs._value);
+        default: return mpark::get<userdata_t>(_value) < mpark::get<userdata_t>(rhs._value);
       }
     }
     inline bool operator> (const LuaValue& rhs) const { return rhs < *this; }
@@ -149,19 +152,19 @@ namespace Lua {
       switch (_type)
       {
         case Type::NIL: return true;
-        case Type::BOOL: return std::get<bool_t>(_value) == std::get<bool_t>(rhs._value);
-        case Type::TABLE: return std::get<table_t>(_value) == std::get<table_t>(rhs._value);
-        case Type::NUMBER: return std::get<number_t>(_value) == std::get<number_t>(rhs._value);
-        case Type::STRING: return std::get<string_t>(_value) == std::get<string_t>(rhs._value);
-        case Type::FUNCTION: return std::get<function_t>(_value) == std::get<function_t>(rhs._value);
-        default: return std::get<userdata_t>(_value) == std::get<userdata_t>(rhs._value);
+        case Type::BOOL: return mpark::get<bool_t>(_value) == mpark::get<bool_t>(rhs._value);
+        case Type::TABLE: return mpark::get<table_t>(_value) == mpark::get<table_t>(rhs._value);
+        case Type::NUMBER: return mpark::get<number_t>(_value) == mpark::get<number_t>(rhs._value);
+        case Type::STRING: return mpark::get<string_t>(_value) == mpark::get<string_t>(rhs._value);
+        case Type::FUNCTION: return mpark::get<function_t>(_value) == mpark::get<function_t>(rhs._value);
+        default: return mpark::get<userdata_t>(_value) == mpark::get<userdata_t>(rhs._value);
       }
     }
     inline bool operator!=(const LuaValue& rhs) const { return !(*this == rhs); }
     inline LuaValue& operator[](LuaValue idx)
     {
       AssertType(Type::TABLE);
-      return std::get<table_t>(_value)[idx];
+      return mpark::get<table_t>(_value)[idx];
     }
 
     template<typename T>
@@ -179,14 +182,14 @@ namespace Lua {
     template<typename T>
     inline bool operator!=(T rhs) const { return *this != LuaValue(rhs); }
 
-    operator const bool_t() const { return std::get<bool_t>(_value); }
-    operator const table_t() const { return std::get<table_t>(_value); }
-    operator const number_t() const { return std::get<number_t>(_value); }
-    operator const string_t() const { return std::get<string_t>(_value); }
-    operator const function_t() const { return std::get<function_t>(_value); }
-    operator const userdata_t() const { return std::get<userdata_t>(_value); }
+    operator const bool_t() const { return mpark::get<bool_t>(_value); }
+    operator const table_t() const { return mpark::get<table_t>(_value); }
+    operator const number_t() const { return mpark::get<number_t>(_value); }
+    operator const string_t() const { return mpark::get<string_t>(_value); }
+    operator const function_t() const { return mpark::get<function_t>(_value); }
+    operator const userdata_t() const { return mpark::get<userdata_t>(_value); }
 
-    operator int() const { return (int)std::get<number_t>(_value); }
+    operator int() const { return (int)mpark::get<number_t>(_value); }
   public:
     /**
      * @brief pop lua table from stack
@@ -233,7 +236,7 @@ namespace Lua {
           value = LuaValue::Pop(state, -3);
 
         // Store key/value pair
-        std::get<table_t>(table_value._value)[key] = value;
+        mpark::get<table_t>(table_value._value)[key] = value;
 
         // Pop key copy, table ref, and value
         LUA->Pop(3);
