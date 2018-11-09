@@ -42,7 +42,7 @@ namespace Lua {
     void Think(lua_State *state)
     {
       // Begin iteration of emitters
-      for (auto &iter = _emitters.begin(); iter != _emitters.end();)
+      for (auto iter = _emitters.begin(); iter != _emitters.end();)
       {
         // Attempt to get shared_ptr
         if (auto emitter = iter->lock())
@@ -140,8 +140,8 @@ namespace Lua {
     void max_events_per_tick(int value) { _max_events_per_tick = value; }
   public:
     LuaEventEmitter() :
-      _max_events_per_tick(100),
-      LuaObject()
+      LuaObject<TType, TChildObject>(),
+      _max_events_per_tick(100)
     {
       AddMethod("on", on);
       AddMethod("once", once);
