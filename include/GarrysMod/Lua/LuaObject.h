@@ -78,7 +78,7 @@ namespace Lua {
       if (_references.find(state) != _references.end())
         return;
 
-      auto self = std::static_pointer_cast<TChildObject>(shared_from_this());
+      auto self = std::static_pointer_cast<TChildObject>(std::enable_shared_from_this<TChildObject>::shared_from_this());
 
       UserData *ud = (UserData*)LUA->NewUserdata(sizeof(UserData));
         ud->data = (void*)new std::shared_ptr<TChildObject>(self);

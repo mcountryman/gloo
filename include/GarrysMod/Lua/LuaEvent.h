@@ -143,10 +143,10 @@ namespace Lua {
       LuaObject<TType, TChildObject>(),
       _max_events_per_tick(100)
     {
-      AddMethod("on", on);
-      AddMethod("once", once);
-      AddMethod("add_listener", add_listener);
-      AddMethod("remove_listeners", remove_listeners);
+      LuaObject<TType, TChildObject>::AddMethod("on", on);
+      LuaObject<TType, TChildObject>::AddMethod("once", once);
+      LuaObject<TType, TChildObject>::AddMethod("add_listener", add_listener);
+      LuaObject<TType, TChildObject>::AddMethod("remove_listeners", remove_listeners);
     }
   public:
     /**
@@ -236,7 +236,7 @@ namespace Lua {
       LuaEventEmitterManager::Current(state)
         .RegisterEmitter(
           state,
-          shared_from_this()
+          this->shared_from_this()
         );
     }
 
@@ -260,7 +260,7 @@ namespace Lua {
       LUA->CheckType(2, Type::STRING);
       LUA->CheckType(3, Type::FUNCTION);
 
-      auto obj = Pop(state, 1);
+      auto obj = LuaObject<TType, TChildObject>::Pop(state, 1);
       auto name = LuaValue::Pop(state, 2);
 
       LUA->Push(3);
@@ -275,7 +275,7 @@ namespace Lua {
       LUA->CheckType(2, Type::STRING);
       LUA->CheckType(3, Type::FUNCTION);
 
-      auto obj = Pop(state, 1);
+      auto obj = LuaObject<TType, TChildObject>::Pop(state, 1);
       auto name = LuaValue::Pop(state, 2);
 
       LUA->Push(3);
@@ -290,7 +290,7 @@ namespace Lua {
       LUA->CheckType(2, Type::STRING);
       LUA->CheckType(3, Type::FUNCTION);
 
-      auto obj = Pop(state, 1);
+      auto obj = LuaObject<TType, TChildObject>::Pop(state, 1);
       auto name = LuaValue::Pop(state, 2);
       auto once = false;
 
@@ -306,7 +306,7 @@ namespace Lua {
 
     static int remove_listeners(lua_State *state)
     {
-      Pop(state, 1)->removeListeners(state);
+      LuaObject<TType, TChildObject>::Pop(state, 1)->removeListeners(state);
       return 0;
     }
   }; // LuaEventEmitter
