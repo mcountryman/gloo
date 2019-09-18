@@ -27,4 +27,6 @@ jobs:
             premake5 gmake
       - run:
           name: build
-          command: make
+          command: |
+            cd project/
+            make
