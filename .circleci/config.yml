@@ -13,7 +13,7 @@ jobs:
 
             # Install gcc, make, curl, git
             $SUDO apt-get update
-            $SUDO apt-get install -y gcc-9 g++-9 make curl git
+            $SUDO apt-get install -y gcc-8 g++-8 make curl git
 
             # Install premake5
             curl -L -o premake.tar.gz "https://github.com/premake/premake-core/releases/download/v5.0.0-alpha14/premake-5.0.0-alpha14-linux.tar.gz"
