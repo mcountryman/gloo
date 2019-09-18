@@ -1,0 +1,31 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: ubuntu:latest
+    steps:
+      - checkout
+      - run:
+          name: setup
+          command: |
+            if [[ $EUID == 0 ]]; then export SUDO=""; else export SUDO="sudo"; fi
+
+            # Install build-essentials, curl
+            $SUDO apt-get update
+            $SUDO apt-get install -y build-essentials curl
+
+            # Install premake5
+            curl -L -o premake.tar.gz "https://github.com/premake/premake-core/releases/download/v5.0.0-alpha14/premake-5.0.0-alpha14-linux.tar.gz"
+            $SUDO tar -xzf premake.tar.gz && rm premake.tar.gz
+            $SUDO mv premake/premake /usr/bin/premake5
+            $SUDO rm -rf premake/
+
+            # Change dir -> `test`
+            cd test/
+      - run:
+          name: prebuild
+          command: |
+            premake5 gmake
+      - run:
+          name: build
+          command: make
