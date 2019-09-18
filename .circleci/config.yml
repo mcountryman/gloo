@@ -1,6 +1,7 @@
 version: 2
 jobs:
   build:
+    working_directory: ~/project
     docker:
       - image: ubuntu:latest
     steps:
@@ -18,15 +19,13 @@ jobs:
             curl -L -o premake.tar.gz "https://github.com/premake/premake-core/releases/download/v5.0.0-alpha14/premake-5.0.0-alpha14-linux.tar.gz"
             $SUDO tar -xzf premake.tar.gz && rm premake.tar.gz
             $SUDO mv premake5 /usr/bin/premake5
-
-            # Change dir -> `test`
-            cd test/
       - run:
           name: prebuild
           command: |
+            cd ~/project/test/
             premake5 gmake
       - run:
           name: build
           command: |
-            cd project/
+            cd ~/project/test/project/
             make
