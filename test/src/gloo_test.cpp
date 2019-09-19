@@ -36,7 +36,7 @@ class TestObject
     {
       while (_run)
       {
-        using namespace std::chrono_literals;
+        using namespace std::literals::chrono_literals;
         std::this_thread::sleep_for(1s);
 
         Emit("event", "anything", "you", "want", "here", 69.99);
